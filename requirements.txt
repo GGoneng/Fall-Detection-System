@@ -1,0 +1,8 @@
+pandas==2.0.3
+numpy==1.24.4
+opencv==4.11.0.86
+matplotlib==3.7.2
+mediapipe==0.10.11
+sklearn==1.0.2
+torch==2.4.1
+torchmetrics==1.4.0.post0
