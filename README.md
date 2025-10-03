@@ -14,6 +14,26 @@ A functional prototype was also implemented and deployed on a Raspberry Pi for r
 
 
 <br><br>
+## 🧩 Data Preprocessing
+- **Dataset**: 3,782 video samples
+- **Challenge**: Detecting falls using **only computer vision** (no physical sensors) was difficult
+- **Inspiration**: Adopted the concept of **gyroscope data** from wearable devices to capture motion patterns
+- **Skeleton Extraction**:
+  - Used `MediaPipe Pose` to estimate human body keypoints
+  - Each joint represented by its **X, Y, Z coordinates** in 3D space
+- Skeleton data served as a **sensor-like input** for the model
+
+<br><br>
+## 🤖 Model Training
+- **Data Type**: Sequences of coordinates (X, Y, Z) for each keypoint.
+- **Model Choice**:
+  - Started with a **LSTM** model for sequence modeling.
+  - During deployment on a **Raspberry Pi**, inference speed was found to be slow.
+  - Switched to **GRU**, which provided faster inference with similar performance.
+- **Why this model**: RNN-based architectures (LSTM/GRU) work well for recognizing temporal patterns in skeleton-based motion data.
+
+
+<br><br>
 ## 🛠️ Tech Stack
 
 | Category        | Tools / Frameworks                |
