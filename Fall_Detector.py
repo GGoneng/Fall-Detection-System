@@ -224,17 +224,17 @@ def fall_detecting():
         output = (model_output > 0.5).int()
 
         if output == 1:
-#             data = {
-#     'messages': [
-#         {
-#             'to': '',
-#             'from': '',
-#             'text': 'fall detected!!!'
-#         }
-#     ]
-# }
+            data = {
+                'messages': [
+                    {
+                        'to': '',
+                        'from': '',
+                        'text': 'fall detected!!!'
+                    }
+                ]
+            }
                 
-#             response = send_many(data)
+            response = send_many(data)
             print("낙상 감지됨!")
             stop_event.set()
             break
