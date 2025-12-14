@@ -12,11 +12,6 @@
 # -----------------------------------------------------------------------------------
 # >> 주요 기능
 # - 지정한 관절 좌표를 영상 데이터에서 추출하여 CSV 파일로 저장
-#
-# >> 업데이트 내역
-# [2025-05-02] 프레임 제한 없이 좌표 추출
-# [2025-05-06] 30fps만큼의 데이터를 목표로 좌표 추출
-# [2025-05-10] 10fps만큼의 데이터를 목표로 좌표 추출
 # -----------------------------------------------------------------------------------
 
 # 파일 및 경로 관리
@@ -75,7 +70,7 @@ def extract_csv(path_list):
         skip_interval = max(1, round(original_fps / 10))
 
         # 추출할 때마다 CSV 파일로 저장
-        with open(f'./10fps_Dataset/pose_landmark_{3772 + i:04d}.csv', mode='w', newline='') as file:
+        with open(f'./10fps_Dataset/pose_landmark_{1 + i:04d}.csv', mode='w', newline='') as file:
             writer = csv.writer(file)
             # 각 랜드마크(관절)별로 x, y, z 좌표 추출
             writer.writerow(['frame', 'landmark_id', 'x', 'y', 'z'])
