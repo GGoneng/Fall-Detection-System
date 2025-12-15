@@ -37,8 +37,8 @@ def extract_path(PATH):
             if filename.endswith((".mp4", ".MP4")):
                 path_list.append(os.path.join(dirpath, filename))
 
-    # 갯수 제한 (500개)
-    return path_list[:500]
+    # 갯수 제한 (1500개)
+    return path_list[:1500]
 
 # 스켈레톤 데이터 추출
 def extract_csv(path_list):
@@ -66,11 +66,11 @@ def extract_csv(path_list):
     for i, path in enumerate(path_list):
         cap = cv2.VideoCapture(path)
         original_fps = cap.get(cv2.CAP_PROP_FPS)
-        # 10fps 추출로 제한
-        skip_interval = max(1, round(original_fps / 10))
+        # 20fps 추출로 제한
+        skip_interval = max(1, round(original_fps / 20))
 
         # 추출할 때마다 CSV 파일로 저장
-        with open(f'./10fps_Dataset/pose_landmark_{1 + i:04d}.csv', mode='w', newline='') as file:
+        with open(f'./Dataset/pose_landmark_{1501 + i:04d}.csv', mode='w', newline='') as file:
             writer = csv.writer(file)
             # 각 랜드마크(관절)별로 x, y, z 좌표 추출
             writer.writerow(['frame', 'landmark_id', 'x', 'y', 'z'])
@@ -118,7 +118,7 @@ def extract_csv(path_list):
 
 if __name__ == "__main__":
     # 영상 데이터 위치 설정
-    PATH = r"D:/041.낙상사고 위험동작 영상-센서 쌍 데이터/3.개방데이터/1.데이터/Training/01.원천데이터/TS/영상/Y/FY/"
+    PATH = r"F:/Fall_Detection_Data/Source_Data/Video/N/N"
     # PATH = r"./Test_Dataset/"
     # PATH = r"F:/Fall_Detection_Data/Source_Data/Video/"
     
