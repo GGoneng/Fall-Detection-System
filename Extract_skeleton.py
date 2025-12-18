@@ -37,7 +37,7 @@ def extract_path(PATH):
             if filename.endswith((".mp4", ".MP4")):
                 path_list.append(os.path.join(dirpath, filename))
 
-    # 갯수 제한 (1500개)
+    # 갯수 제한 
     return path_list
 
 # 스켈레톤 데이터 추출

@@ -11,9 +11,6 @@
 # -----------------------------------------------------------------------------------
 # >> 주요 기능
 # - 영상별로 따로 추출한 여러 개의 CSV 파일을 하나의 데이터로 변경
-#
-# >> 업데이트 내역
-# [2025-05-03] 데아터 병합
 # -----------------------------------------------------------------------------------
 
 # 데이터프레임 기반 데이터 처리
@@ -26,7 +23,7 @@ import re
 import os
 
 # CSV 파일들이 있는 폴더 경로
-folder_path = './new_10fps_Dataset3'
+folder_path = './Dataset'
 
 # CSV 파일 뒤에 붙은 번호순으로 정렬
 csv_files = sorted(
@@ -47,6 +44,6 @@ for idx, file in enumerate(csv_files):
 merged_df = pd.concat(df_list, ignore_index=True)
 
 # 병합된 데이터 CSV 파일로 저장
-merged_df.to_csv("10fps_merged_data(no interpolation).csv", index = False)
+merged_df.to_csv("20fps_merged_data(no interpolation).csv", index = False)
 
 print(merged_df['source_index'].value_counts().sort_index())
