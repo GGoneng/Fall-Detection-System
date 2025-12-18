@@ -23,7 +23,7 @@ import re
 import os
 
 # CSV 파일들이 있는 폴더 경로
-folder_path = './Dataset'
+folder_path = './New_Dataset'
 
 # CSV 파일 뒤에 붙은 번호순으로 정렬
 csv_files = sorted(
@@ -33,10 +33,11 @@ csv_files = sorted(
 # 모든 CSV 파일을 읽어오되, source_index를 부여
 df_list = []
 
-for idx, file in enumerate(csv_files):
-    df = pd.read_csv(file)
+for idx, path in enumerate(csv_files):
+    csv_num = int(path.split("_")[3][:4])
+    df = pd.read_csv(path)
     df.dropna(inplace = True)
-    df['source_index'] = idx  # 각 파일에 고유 인덱스 부여
+    df['source_index'] = csv_num  # 각 파일에 고유 인덱스 부여
     df_list.append(df)
 
 
@@ -44,6 +45,6 @@ for idx, file in enumerate(csv_files):
 merged_df = pd.concat(df_list, ignore_index=True)
 
 # 병합된 데이터 CSV 파일로 저장
-merged_df.to_csv("20fps_merged_data(no interpolation).csv", index = False)
+merged_df.to_csv("20fps_merged_data.csv", index = False)
 
 print(merged_df['source_index'].value_counts().sort_index())
