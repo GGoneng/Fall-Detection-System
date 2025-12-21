@@ -144,7 +144,7 @@ def change_type(data_df: pd.DataFrame, label_df: pd.DataFrame) -> Tuple[List, Li
     x_list = []
 
     for i in data_df["source_index"].unique():
-        x_list.append(np.array(data_df[data_df["source_index"] == i].drop(["source_index"], axis = 1)))
+        x_list.append(np.array(data_df[data_df["source_index"] == i].drop(["frame", "source_index"], axis = 1)))
 
     y_list = list(label_df["label"])
 
