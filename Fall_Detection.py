@@ -30,6 +30,9 @@ import numpy as np
 # 파일 및 경로 관리
 import os
 
+# 난수 생성 및 랜덤 샘플링
+import random
+
 # 학습/검증용 데이터 분할
 from sklearn.model_selection import train_test_split
 
@@ -48,12 +51,43 @@ from torch.utils.data import Dataset, DataLoader
 # 분류 모델 평가 지표 계산
 from torchmetrics.classification import BinaryF1Score
 
+# 타입 힌트 객체
+from typing import List, Tuple
+
 
 # 데이터 및 라벨 경로 설정
 DATA_PATH = "./20fps_merged_data.csv"
 LABEL_PATH = "./Label.csv"
 
+# 변수 설정
+BATCH_SIZE = 64
 
+
+
+# 학습용 데이터셋
+class DetectionDataset(Dataset):
+    def __init__(self, data_list: List, label_list: List) -> None:
+        self.data_list = data_list
+        self.label_list = label_list
+    
+    def __len__(self) -> int:
+        return len(self.data_list)
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.tensor, torch.tensor]:
+        featureTS = torch.tensor(self.data_list[idx], dtype=torch.float32)
+        targetTS = torch.tensor([self.label_list[idx]], dtype=torch.float32)
+
+        return featureTS, targetTS
+
+# 실험 조건 고정 함수
+def set_seed(seed: int = 7) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+
+# 데이터 전처리 함수
 def preprocess(data_path: str, frame: int=2600) -> pd.DataFrame:
     # 데이터 CSV 파일 -> DataFrame 변환
     df = pd.read_csv(data_path)
@@ -105,12 +139,51 @@ def preprocess(data_path: str, frame: int=2600) -> pd.DataFrame:
 
     return df_delta
 
+# DataFrame -> List 전환 함수
+def change_type(data_df: pd.DataFrame, label_df: pd.DataFrame) -> Tuple[List, List]:
+    x_list = []
+
+    for i in data_df["source_index"].unique():
+        x_list.append(np.array(data_df[data_df["source_index"] == i].drop(["source_index"], axis = 1)))
+
+    y_list = list(label_df["label"])
+
+    return x_list, y_list
+
+# 메인 함수
 def main():
+    # 실험 조건 고정
+    set_seed()
+
     # 데이터 전처리
     data_df = preprocess(DATA_PATH)
     
     # 라벨 CSV 파일 -> DataFrame 변환
     label_df = pd.read_csv(LABEL_PATH)
+
+    # DataFrame -> List 전환
+    x_list, y_list = change_type(data_df, label_df)
+
+    # Train: 70%, Val: 15%, Test: 15%
+    # Train, Val 데이터 나누기
+    X_train, X_val, y_train, y_val = train_test_split(x_list, y_list, 
+                                                    test_size=0.3,
+                                                    random_state=7,
+                                                    stratify=y_list)
+    
+    # Val, Test 데이터 나누기 
+    X_val, X_test, y_val, y_test = train_test_split(X_val, y_val,
+                                                    test_size=0.5,
+                                                    random_state=7,
+                                                    stratify=y_val)
+    
+    trainDS = DetectionDataset(X_train, y_train)
+    valDS = DetectionDataset(X_val, y_val)
+    testDS = DetectionDataset(X_test, y_test)
+
+    trainDL = DataLoader(trainDS, batch_size=BATCH_SIZE, shuffle=True)
+    valDL = DataLoader(valDS, batch_size=BATCH_SIZE, shuffle=False)
+    testDL = DataLoader(testDS, batch_size=BATCH_SIZE, shuffle=False)
 
 
 if __name__ == "__main__":
