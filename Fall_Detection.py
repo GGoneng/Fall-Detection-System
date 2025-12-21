@@ -2,7 +2,7 @@
 # 파일명       : Fall_Detection.py
 # 설명         : 스켈레톤 데이터를 가지고 낙상 감지 모델 학습
 # 작성자       : 이민하
-# 작성일       : 2025-05-04
+# 작성일       : 2025-12-18
 # 
 # 사용 모듈    :
 # - pandas                           # 데이터프레임 기반 데이터 처리
@@ -48,40 +48,70 @@ from torch.utils.data import Dataset, DataLoader
 # 분류 모델 평가 지표 계산
 from torchmetrics.classification import BinaryF1Score
 
+
 # 데이터 및 라벨 경로 설정
 DATA_PATH = "./20fps_merged_data.csv"
 LABEL_PATH = "./Label.csv"
 
-# 데이터 및 라벨 CSV 파일 -> DataFrame 변환
-data_df = pd.read_csv(DATA_PATH)
-label_df = pd.read_csv(LABEL_PATH)
 
-# 데이터 형태 맞추기
-val = data_df["source_index"].value_counts().values
-idx = data_df["source_index"].value_counts().index
+def preprocess(data_path: str, frame: int=2600) -> pd.DataFrame:
+    # 데이터 CSV 파일 -> DataFrame 변환
+    df = pd.read_csv(data_path)
 
-# 13개의 관절을 20fps로 10초짜리 영상에서 추출하므로 13 * 20 * 10 = 2600
-for i, num in enumerate(val):
-    if num > 2600:
-        data_df[data_df["source_index"] == idx[i]] = data_df[data_df["source_index"] == idx[i]][:2600]
+    # 데이터 형태 맞추기
+    val = df["source_index"].value_counts().values
+    idx = df["source_index"].value_counts().index
 
-print(data_df["source_index"].value_counts())
+    # 13개의 관절을 20fps로 10초짜리 영상에서 추출하므로 13 * 20 * 10 = 2600
+    for i, num in enumerate(val):
+        if num > frame:
+            df[df["source_index"] == idx[i]] = df[df["source_index"] == idx[i]][:frame]
 
-# 결측치 제거 (아예 추출이 안된 데이터 제거)
-data_df.dropna(inplace = True)
+    print(df["source_index"].value_counts())
 
-# 정렬
-df = data_df.sort_values(by=["source_index", "frame"])
+    # 결측치 제거 (아예 추출이 안된 데이터 제거)
+    df.dropna(inplace = True)
 
-# 좌표(x, y, z) 별로 pivot
-df_pivot = df.pivot(index=["frame", "source_index"], columns="landmark_id", values=["x", "y", "z"])
+    # 정렬
+    df = df.sort_values(by=["source_index", "frame"])
 
-# 다중 인덱스 컬럼 -> 단일 문자열 변환 (예: ('x', 11) -> 'x_11')
-df_pivot.columns = [f"{coord}_{int(lid)}" for coord, lid in df_pivot.columns]
+    # 좌표(x, y, z) 별로 pivot
+    df_pivot = df.pivot(index=["frame", "source_index"], columns="landmark_id", values=["x", "y", "z"])
 
-# 인덱스 복구 및 정렬
-df_pivot.reset_index(inplace=True)
-df_pivot = df_pivot.sort_values(by=["source_index", "frame"]).reset_index(drop=True)
+    # 다중 인덱스 컬럼 -> 단일 문자열 변환 (예: ('x', 11) -> 'x_11')
+    df_pivot.columns = [f"{coord}_{int(lid)}" for coord, lid in df_pivot.columns]
 
-# 결과 CSV파일로 저장
-df_pivot.to_csv("20fps_reshaped_data.csv", index=False)
+    # 인덱스 복구 및 정렬
+    df_pivot.reset_index(inplace=True)
+    df_pivot = df_pivot.sort_values(by=["source_index", "frame"]).reset_index(drop=True)
+
+    # 랜드마크별 x, y, z 좌표 차이를 구하기 위한 열 선택
+    coord_cols = [c for c in df_pivot.columns if c.startswith(('x_', 'y_', 'z_'))]
+
+    df_delta = df_pivot.copy()
+
+    # source_index가 바뀌는 부분에서는 새롭게 좌표 값의 차이를 구하기 위해 source_index 열로 그룹화 후 차이 구하기
+    df_delta[coord_cols] = (
+        df_pivot
+        .groupby('source_index')[coord_cols]
+        .diff()
+    )
+
+    # 1 프레임은 diff()로 인해 결측치가 되므로 제거
+    df_delta = df_delta.dropna().reset_index(drop=True)
+
+    # 결과 CSV파일로 저장
+    df_delta.to_csv("20fps_reshaped_data.csv", index=False)
+
+    return df_delta
+
+def main():
+    # 데이터 전처리
+    data_df = preprocess(DATA_PATH)
+    
+    # 라벨 CSV 파일 -> DataFrame 변환
+    label_df = pd.read_csv(LABEL_PATH)
+
+
+if __name__ == "__main__":
+    main()
