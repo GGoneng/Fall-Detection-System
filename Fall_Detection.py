@@ -40,6 +40,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pack_padded_sequence
 
 # 최적화 및 학습률 조정
 import torch.optim as optim
@@ -78,6 +79,71 @@ class DetectionDataset(Dataset):
         targetTS = torch.tensor([self.label_list[idx]], dtype=torch.float32)
 
         return featureTS, targetTS
+    
+# 모델
+class RNNModel(nn.Module):
+    def __init__(self, input_size: int, hidden_size: int, n_layers: int, 
+                 dropout: float, bidirectional: bool, 
+                 model_type: str, batch_first: bool=True) -> None:
+        super().__init__()
+    
+        # LSTM 모델
+        if model_type == "lstm":
+            self.model = nn.LSTM(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=n_layers,
+                dropout=dropout,
+                bidirectional=bidirectional,
+                batch_first=batch_first
+            )
+        
+        elif model_type == "gru":
+            self.model = nn.GRU(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=n_layers,
+                dropout=dropout,
+                bidirectional=bidirectional,
+                batch_first=batch_first
+            )     
+
+        self.batch_first = batch_first
+
+        # 출력층
+        # 양방향 (시퀀스 데이터에서 더 많은 정보 추출 가능)
+        if bidirectional:
+            self.output = nn.Linear(hidden_size * 2, 1)
+        else:
+            self.output = nn.Linear(hidden_size, 1)
+
+    def forward_train(self, inputs, length):
+        packed = pack_padded_sequence(
+            inputs, length,
+            batch_first=self.batch_first,
+            enforce_sorted=False
+        )
+
+        packed_out, h = self.model(packed)
+        out = h[-1]
+
+        return out
+    
+    def forward_rasp(self, inputs, length):
+        output, _ = self.model(inputs)
+
+        out = output[:, length.item() - 1, :]
+
+        return out
+        
+    def forward(self, inputs, length):
+        output, _ = self.model(inputs)
+        # 마지막 hidden state 선택
+        output = output[:, length - 1, :]
+        result = self.output(output)
+        
+        return result
+
 
 # 실험 조건 고정 함수
 def set_seed(seed: int = 7) -> None:
@@ -150,6 +216,20 @@ def change_type(data_df: pd.DataFrame, label_df: pd.DataFrame) -> Tuple[List, Li
 
     return x_list, y_list
 
+# 데이터 로더 처리 함수 (Padding 처리)
+def collate_fn(batch):
+    feature, target = zip(*batch)
+
+    feature = torch.stack(feature)
+    target = torch.stack(target)
+
+    # 각 랜드마크의 좌표가 전부 0일 경우 예외 처리 -> Length에 들어가지 않음
+    lengths = torch.stack([
+        (length.abs().sum(dim=1) != 0).sum() for length in feature
+    ])
+
+    return feature, target, lengths
+
 # 메인 함수
 def main():
     # 실험 조건 고정
@@ -181,9 +261,9 @@ def main():
     valDS = DetectionDataset(X_val, y_val)
     testDS = DetectionDataset(X_test, y_test)
 
-    trainDL = DataLoader(trainDS, batch_size=BATCH_SIZE, shuffle=True)
-    valDL = DataLoader(valDS, batch_size=BATCH_SIZE, shuffle=False)
-    testDL = DataLoader(testDS, batch_size=BATCH_SIZE, shuffle=False)
+    trainDL = DataLoader(trainDS, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+    valDL = DataLoader(valDS, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
+    testDL = DataLoader(testDS, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
 
 
 if __name__ == "__main__":

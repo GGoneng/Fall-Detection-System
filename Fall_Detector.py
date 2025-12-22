@@ -210,7 +210,7 @@ def fall_detecting():
         test_df.loc[index_list, ['x', 'y', 'z']] = window_list
 
         test_df2 = test_df.groupby("landmark_id").apply(
-            lambda x: x.sort_values(by=["frame", "landmark_id"]).interpolate().ffill().bfill()
+            lambda x: x.sort_values(by=["frame", "landmark_id"]).interpolate().ffill()
         ).reset_index(drop=True)
         test_df2 = test_df2.sort_values(by=["frame", "landmark_id"]).reset_index(drop=True)
 
