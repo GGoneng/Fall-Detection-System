@@ -272,7 +272,6 @@ def validating(model, valDL, score_fn, loss_fn, device):
     model.eval()
     score_fn.reset()
 
-    score_total = 0
     loss_total = 0
 
     with torch.no_grad():
@@ -282,17 +281,19 @@ def validating(model, valDL, score_fn, loss_fn, device):
             lengths = lengths
             
             logit = model(feature, lengths)
+
             loss = loss_fn(logit, target)
+            loss_total += loss.item()
 
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
-
-            score = score_fn(preds, target)
-        
-            loss_total += loss.item()
-            score_total += score.item()
+            
+            score_fn.update(preds, target)
     
-    return loss_total, score_total
+    final_score = score_fn.compute().item()
+    final_loss = loss_total / len(valDL)
+            
+    return final_score, final_loss
 
 # Train 함수
 def training(model, trainDL, valDL, optimizer,
@@ -318,7 +319,6 @@ def training(model, trainDL, valDL, optimizer,
         score_fn.reset()
 
         loss_total = 0
-        score_total = 0
 
         for feature, target, lengths in trainDL:
             feature = feature.to(device)
@@ -330,16 +330,14 @@ def training(model, trainDL, valDL, optimizer,
             
             # 추론값으로 Loss값 계산
             loss = loss_fn(logit, target)
+            loss_total += loss.item()
 
             # 활성화 함수 + 이진 분류 결과로 변경
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
             # Score 확인
-            score = score_fn(preds, target)
-        
-            loss_total += loss.item()
-            score_total += score.item()
+            score_fn.update(preds, target)
 
             # 이전 gradient 초기화
             optimizer.zero_grad()
@@ -350,14 +348,16 @@ def training(model, trainDL, valDL, optimizer,
             # 계산된 gradient로 가중치 업데이트
             optimizer.step()
         
+        final_score = score_fn.compute().item()
+
         # Val Loss, Score 계산
-        val_loss, val_score = validating(model, valDL, score_fn, loss_fn, device)
-
+        val_score, val_loss = validating(model, valDL, score_fn, loss_fn, device)
+        
         LOSS_HISTORY[0].append(loss_total / len(trainDL))
-        SCORE_HISTORY[0].append(score_total / len(trainDL))
+        SCORE_HISTORY[0].append(final_score)
 
-        LOSS_HISTORY[1].append(val_loss / len(valDL))
-        SCORE_HISTORY[1].append(val_score / len(valDL))
+        LOSS_HISTORY[1].append(val_loss)
+        SCORE_HISTORY[1].append(val_score)
 
         # print(f"[{count} / {epoch}]\n - TRAIN LOSS : {LOSS_HISTORY[0][-1]}")
         # print(f"- TRAIN SCORE : {SCORE_HISTORY[0][-1]}")
@@ -391,10 +391,7 @@ def training(model, trainDL, valDL, optimizer,
 
     model.load_state_dict(state_dict)
 
-    best_loss, best_score = validating(model, valDL, score_fn, loss_fn, device)
-    
-    best_loss = best_loss / len(valDL)
-    best_score = best_score / len(valDL)
+    best_score, best_loss = validating(model, valDL, score_fn, loss_fn, device)
 
     print(f"- {fold} Fold best Score: {best_score}\n- {fold} Fold best Loss: {best_loss}")
 
