@@ -368,3 +368,7 @@ def main():
 
     print(f"\n\nTest Loss : {test_loss}")
     print(f"Test Score : {test_score}")
+
+
+if __name__ == "__main__":
+    main()
