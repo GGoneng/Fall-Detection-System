@@ -236,16 +236,14 @@ def training(model, trainDL, optimizer,
             
             # 추론값으로 Loss값 계산
             loss = loss_fn(logit, target)
+            loss_total += loss.item()
 
             # 활성화 함수 + 이진 분류 결과로 변경
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
             # Score 확인
-            score = score_fn(preds, target)
-        
-            loss_total += loss.item()
-            score_total += score.item()
+            score_fn.update(preds, target)
 
             # 이전 gradient 초기화
             optimizer.zero_grad()
@@ -256,8 +254,10 @@ def training(model, trainDL, optimizer,
             # 계산된 gradient로 가중치 업데이트
             optimizer.step()
         
+        final_score = score_fn.compute().item()
+
         LOSS_HISTORY.append(loss_total / len(trainDL))
-        SCORE_HISTORY.append(score_total / len(trainDL))
+        SCORE_HISTORY.append(final_score)
 
         print(f"[{count} / {epoch}]\n - TRAIN LOSS : {LOSS_HISTORY[-1]}")
         print(f"- TRAIN SCORE : {SCORE_HISTORY[-1]}")
@@ -276,7 +276,6 @@ def testing(model, testDL, score_fn, loss_fn, device):
     model.eval()
     score_fn.reset()
 
-    score_total = 0
     loss_total = 0
 
     with torch.no_grad():
@@ -286,17 +285,19 @@ def testing(model, testDL, score_fn, loss_fn, device):
             lengths = lengths
 
             logit = model(feature, lengths)
+
             loss = loss_fn(logit, target)
+            loss_total += loss.item()
 
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
-            score = score_fn(preds, target)
+            score_fn.update(preds, target)
 
-            loss_total += loss.item()
-            score_total += score.item()
+    final_score = score_fn.compute().item()
+    final_loss = loss_total / len(testDL)
 
-    return loss_total, score_total
+    return final_score, final_loss
 
 # 메인 함수
 def main():
@@ -363,10 +364,7 @@ def main():
                         EPOCH, score_fn, loss_fn, DEVICE, 
                         model_type)
 
-    test_loss, test_score = testing(model, testDL, score_fn, loss_fn, DEVICE)
-
-    test_loss = test_loss / len(testDL)
-    test_score = test_score / len(testDL)
+    test_score, test_loss = testing(model, testDL, score_fn, loss_fn, DEVICE)
 
     print(f"\n\nTest Loss : {test_loss}")
     print(f"Test Score : {test_score}")
