@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------------
-# 파일명       : Fall_Detection.py
-# 설명         : 스켈레톤 데이터를 가지고 낙상 감지 모델 학습
+# 파일명       : Fall_Detection_Hyperparameter_Tuning.py
+# 설명         : RNN 계열 낙상 감지 모델 하이퍼파라미터 튜닝
 # 작성자       : 이민하
 # 작성일       : 2025-12-18
 # 
@@ -19,7 +19,7 @@
 # -----------------------------------------------------------------------------------
 # >> 주요 기능
 # - 스켈레톤 데이터를 RNN 모델 종류를 통해 낙상인지 아닌지 시계열 분석
-# - 시계열 모델 간 성능 비교 분석
+# - K-Fold를 통해 RNN 모델 간 최적의 하이퍼파라미터 튜닝
 # -----------------------------------------------------------------------------------
 
 
@@ -139,9 +139,13 @@ class RNNModel(nn.Module):
             enforce_sorted=False
         )
 
-        # h_n의 shape (n_layers * num_directions, batch, hidden_size)
-        # h_n는 각 layer별 hidden_state 접근 가능
-        packed_out, (h_n, c_n) = self.model(packed)
+        if self.model_type == "lstm":
+            # h_n의 shape (n_layers * num_directions, batch, hidden_size)
+            # h_n는 각 layer별 hidden_state 접근 가능
+            packed_out, (h_n, c_n) = self.model(packed)
+
+        elif self.model_type == "gru":
+            packed_out, h_n = self.model(packed)
     
         # Pack으로 인해 output을 바로 사용할 수 없으므로 양방향일 경우 수동 concat
         if self.bidirectional:
@@ -292,7 +296,8 @@ def validating(model, valDL, score_fn, loss_fn, device):
 
 # Train 함수
 def training(model, trainDL, valDL, optimizer,
-             epoch, score_fn, loss_fn, scheduler, device, fold):
+             epoch, score_fn, loss_fn, scheduler, device, 
+             fold):
 
     # 가중치 파일 저장 위치 정의
     SAVE_PATH = "./saved_models"
@@ -410,7 +415,7 @@ def main():
     EPOCH = 100
 
     input_size = 39
-    model_type = "lstm"
+    model_type = "gru"
 
     param_grid = {
         "lr": [5e-3, 1e-3, 5e-4, 1e-4],
@@ -504,7 +509,8 @@ def main():
 
             # 모델 학습 시작
             score, loss = training(model, trainDL, valDL, optimizer,
-                                EPOCH, score_fn, loss_fn, scheduler, DEVICE, fold + 1)
+                                EPOCH, score_fn, loss_fn, scheduler, DEVICE, 
+                                fold + 1)
 
             fold_score.append(score)
             fold_loss.append(loss)
