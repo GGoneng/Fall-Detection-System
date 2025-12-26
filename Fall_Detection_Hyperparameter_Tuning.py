@@ -10,7 +10,7 @@
 # - os                               # 파일 및 경로 관리
 # - random                           # 난수 생성 및 랜덤 샘플링
 # - sklearn.model_selection          # 학습/검증용 데이터 분할
-# - torch, torch.nn, F               # PyTorch 모델 구축 및 연산
+# - torch, torch.nn                  # PyTorch 모델 구축 및 연산
 # - torch.optim, lr_scheduler        # 최적화 및 학습률 조정
 # - torch.utils.data                 # 데이터셋 및 데이터로더 처리
 # - torchmetrics.classification      # 분류 모델 평가 지표 계산
@@ -47,7 +47,6 @@ from sklearn.model_selection import train_test_split, StratifiedKFold, Parameter
 # PyTorch 모델 구축 및 연산
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence
 
 # 최적화 및 학습률 조정
@@ -75,7 +74,7 @@ class DetectionDataset(Dataset):
     def __len__(self) -> int:
         return len(self.data_list)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.tensor, torch.tensor]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         featureTS = torch.tensor(self.data_list[idx], dtype=torch.float32)
         targetTS = torch.tensor([self.label_list[idx]], dtype=torch.float32)
 
@@ -130,7 +129,7 @@ class RNNModel(nn.Module):
             self.output = nn.Linear(hidden_size, 1)
 
     # 학습용 forward (Pack 사용)
-    def forward_train(self, inputs, length):
+    def forward_train(self, inputs: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
         length = length.to("cpu")
 
         packed = pack_padded_sequence(
@@ -160,7 +159,7 @@ class RNNModel(nn.Module):
         return out
     
     # 라즈베리파이 추론용 forward (배치 사이즈는 무조건 1)
-    def forward_rasp(self, inputs, length):
+    def forward_rasp(self, inputs: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
         # output의 shape (batch, seq_len, hidden_size)
         # output은 각 timestep(seq_len)별 마지막 hidden_state 접근 가능
         output, h = self.model(inputs)
@@ -170,7 +169,7 @@ class RNNModel(nn.Module):
 
         return out
         
-    def forward(self, inputs, length):
+    def forward(self, inputs: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
         if self.forward_type == "train":
             output = self.forward_train(inputs, length)
         elif self.forward_type == "rasp":
@@ -185,7 +184,7 @@ class RNNModel(nn.Module):
 
 
 # 실험 조건 고정 함수
-def set_seed(seed: int = 7) -> None:
+def set_seed(seed: int=7) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -254,7 +253,7 @@ def change_type(data_df: pd.DataFrame, label_df: pd.DataFrame) -> Tuple[List, Li
     return x_list, y_list
 
 # 데이터 로더 처리 함수 (Padding 처리)
-def collate_fn(batch):
+def collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     feature, target = zip(*batch)
 
     feature = torch.stack(feature)
@@ -268,11 +267,12 @@ def collate_fn(batch):
     return feature, target, lengths
 
 # Validate 함수
-def validating(model, valDL, score_fn, loss_fn, device):
+def validating(model: RNNModel, valDL: DataLoader, score_fn: BinaryF1Score, 
+               loss_fn: nn.BCEWithLogitsLoss, device: str) -> Tuple[float, float]:
     model.eval()
     score_fn.reset()
 
-    loss_total = 0
+    loss_total = 0.0
 
     with torch.no_grad():
         for feature, target, lengths in valDL:
@@ -280,25 +280,32 @@ def validating(model, valDL, score_fn, loss_fn, device):
             target = target.to(device)
             lengths = lengths
             
+            # 결과 추론
             logit = model(feature, lengths)
 
+            # 추론값으로 Loss값 계산
             loss = loss_fn(logit, target)
             loss_total += loss.item()
 
+            # 활성화 함수 + 이진 분류 결과로 변경
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
             
+            # Score 누적
             score_fn.update(preds, target)
     
+    # Score 계산
     final_score = score_fn.compute().item()
+    # 배치별 Loss 평균 값
     final_loss = loss_total / len(valDL)
             
     return final_score, final_loss
 
 # Train 함수
-def training(model, trainDL, valDL, optimizer,
-             epoch, score_fn, loss_fn, scheduler, device, 
-             fold):
+def training(model: RNNModel, trainDL: DataLoader, valDL: DataLoader, 
+             optimizer: optim.AdamW, epoch: int, score_fn: BinaryF1Score, 
+             loss_fn: nn.BCEWithLogitsLoss, scheduler: lr_scheduler.ReduceLROnPlateau, 
+             device: str, fold: int) -> Tuple[float, float]:
 
     # 가중치 파일 저장 위치 정의
     SAVE_PATH = "./saved_models"
@@ -336,7 +343,7 @@ def training(model, trainDL, valDL, optimizer,
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
-            # Score 확인
+            # Score 누적
             score_fn.update(preds, target)
 
             # 이전 gradient 초기화
@@ -348,6 +355,7 @@ def training(model, trainDL, valDL, optimizer,
             # 계산된 gradient로 가중치 업데이트
             optimizer.step()
         
+        # Score 누적
         final_score = score_fn.compute().item()
 
         # Val Loss, Score 계산
@@ -400,7 +408,7 @@ def training(model, trainDL, valDL, optimizer,
 
 
 # 메인 함수
-def main():
+def main() -> None:
 
     # 데이터 및 라벨 경로 설정
     DATA_PATH = "./20fps_merged_data.csv"
@@ -441,6 +449,7 @@ def main():
                                                     random_state=7,
                                                     stratify=y_list)
     
+    # 전처리 데이터 저장
     with open("dataset.pkl", "wb") as f:
         pickle.dump(
             {
@@ -512,12 +521,14 @@ def main():
             fold_score.append(score)
             fold_loss.append(loss)
 
+        # 메모리 정리
         del model
         del optimizer
 
         torch.cuda.empty_cache()
         gc.collect()
         
+        # 결과 출력
         mean_score = np.mean(fold_score)
         std_score = np.std(fold_score)
 

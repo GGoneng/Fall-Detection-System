@@ -5,13 +5,13 @@
 # 작성일       : 2025-12-23
 # 
 # 사용 모듈    :
-# - pandas                           # 데이터프레임 기반 데이터 처리
 # - numpy                            # 수치 계산 및 배열 연산
 # - os                               # 파일 및 경로 관리
 # - random                           # 난수 생성 및 랜덤 샘플링
-# - sklearn.model_selection          # 학습/검증용 데이터 분할
-# - torch, torch.nn, F               # PyTorch 모델 구축 및 연산
-# - torch.optim, lr_scheduler        # 최적화 및 학습률 조정
+# - pickle                           # 데이터셋, 스케일러 저장 및 로드
+# - sklearn.preprocessing            # Feature 스케일링
+# - torch, torch.nn                  # PyTorch 모델 구축 및 연산
+# - torch.optim                      # 최적화 조정
 # - torch.utils.data                 # 데이터셋 및 데이터로더 처리
 # - torchmetrics.classification      # 분류 모델 평가 지표 계산
 # - typing                           # 타입 힌트 객체
@@ -19,12 +19,9 @@
 # -----------------------------------------------------------------------------------
 # >> 주요 기능
 # - 스켈레톤 데이터를 RNN 모델 종류를 통해 낙상인지 아닌지 시계열 분석
-# - RNN 모델 간 성능 비교
-# - 모델 양자화 및 torchscript 성능 비교
+# - RNN 모델 간 Test 성능 비교
 # -----------------------------------------------------------------------------------
 
-# 데이터프레임 기반 데이터 처리
-import pandas as pd
 
 # 수치 계산 및 배열 연산
 import numpy as np
@@ -35,24 +32,19 @@ import os
 # 난수 생성 및 랜덤 샘플링
 import random
 
+# 데이터셋, 스케일러 저장 및 로드
 import pickle
 
-import gc
-
+# Feature 스케일링
 from sklearn.preprocessing import StandardScaler
-
-# 학습/검증용 데이터 분할
-from sklearn.model_selection import train_test_split, StratifiedKFold, ParameterGrid
 
 # PyTorch 모델 구축 및 연산
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence
 
-# 최적화 및 학습률 조정
+# 최적화 조정
 import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
 
 # 데이터셋 및 데이터로더 처리
 from torch.utils.data import Dataset, DataLoader
@@ -73,7 +65,7 @@ class DetectionDataset(Dataset):
     def __len__(self) -> int:
         return len(self.data_list)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.tensor, torch.tensor]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         featureTS = torch.tensor(self.data_list[idx], dtype=torch.float32)
         targetTS = torch.tensor([self.label_list[idx]], dtype=torch.float32)
 
@@ -128,20 +120,23 @@ class RNNModel(nn.Module):
             self.output = nn.Linear(hidden_size, 1)
 
     # 학습용 forward (Pack 사용)
-    def forward_train(self, inputs, length):
+    def forward_train(self, inputs: torch.Tensor, length:torch.Tensor) -> torch.Tensor:
         length = length.to("cpu")
 
+        # Padding을 무시하기 위해 PackedSequence 객체로 전환
         packed = pack_padded_sequence(
             inputs, length,
             batch_first=self.batch_first,
             enforce_sorted=False
         )
 
+        # LSTM의 출력값은 (output, h_n, c_n)
         if self.model_type == "lstm":
             # h_n의 shape (n_layers * num_directions, batch, hidden_size)
             # h_n는 각 layer별 hidden_state 접근 가능
             packed_out, (h_n, c_n) = self.model(packed)
 
+        # GRU의 출력값은 (output, h_n)
         elif self.model_type == "gru":
             packed_out, h_n = self.model(packed)
     
@@ -158,7 +153,7 @@ class RNNModel(nn.Module):
         return out
     
     # 라즈베리파이 추론용 forward (배치 사이즈는 무조건 1)
-    def forward_rasp(self, inputs, length):
+    def forward_rasp(self, inputs: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
         # output의 shape (batch, seq_len, hidden_size)
         # output은 각 timestep(seq_len)별 마지막 hidden_state 접근 가능
         output, h = self.model(inputs)
@@ -168,7 +163,7 @@ class RNNModel(nn.Module):
 
         return out
         
-    def forward(self, inputs, length):
+    def forward(self, inputs: torch.Tensor, length: torch.Tensor) -> torch.Tensor:
         if self.forward_type == "train":
             output = self.forward_train(inputs, length)
         elif self.forward_type == "rasp":
@@ -183,7 +178,7 @@ class RNNModel(nn.Module):
 
 
 # 실험 조건 고정 함수
-def set_seed(seed: int = 7) -> None:
+def set_seed(seed: int=7) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -191,7 +186,7 @@ def set_seed(seed: int = 7) -> None:
     torch.backends.cudnn.deterministic = True
 
 # 데이터 로더 처리 함수 (Padding 처리)
-def collate_fn(batch):
+def collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     feature, target = zip(*batch)
 
     feature = torch.stack(feature)
@@ -205,9 +200,9 @@ def collate_fn(batch):
     return feature, target, lengths
 
 # Train 함수
-def training(model, trainDL, optimizer,
-             epoch, score_fn, loss_fn, 
-             device, model_type):
+def training(model: RNNModel, trainDL: DataLoader, optimizer: optim.AdamW,
+             epoch: int, score_fn: BinaryF1Score, loss_fn: nn.BCEWithLogitsLoss, 
+             device: str, model_type: str) -> Tuple[List, List]:
 
     # 가중치 파일 저장 위치 정의
     SAVE_PATH = "./saved_models"
@@ -216,6 +211,7 @@ def training(model, trainDL, optimizer,
     # 가중치 저장을 위한 변수
     SAVE_WEIGHT = os.path.join(SAVE_PATH, f"best_model_weights_{model_type}.pth")
     
+    # 성능 히스토리 저장을 위한 리스트
     LOSS_HISTORY = []
     SCORE_HISTORY = []
 
@@ -224,7 +220,6 @@ def training(model, trainDL, optimizer,
         score_fn.reset()
 
         loss_total = 0
-        score_total = 0
 
         for feature, target, lengths in trainDL:
             feature = feature.to(device)
@@ -242,7 +237,7 @@ def training(model, trainDL, optimizer,
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
-            # Score 확인
+            # Score 누적
             score_fn.update(preds, target)
 
             # 이전 gradient 초기화
@@ -254,6 +249,7 @@ def training(model, trainDL, optimizer,
             # 계산된 gradient로 가중치 업데이트
             optimizer.step()
         
+        # 최종 Score 계산
         final_score = score_fn.compute().item()
 
         LOSS_HISTORY.append(loss_total / len(trainDL))
@@ -272,11 +268,26 @@ def training(model, trainDL, optimizer,
 
     return LOSS_HISTORY, SCORE_HISTORY 
 
-def testing(model, testDL, score_fn, loss_fn, device):
+# 최종 테스트 함수
+def testing(model: RNNModel, testDL: DataLoader, score_fn: BinaryF1Score, 
+            loss_fn: nn.BCEWithLogitsLoss, device: str, model_type: str) -> Tuple[float, float]:
+    
+    # 가중치 파일 저장 위치 정의
+    SAVE_PATH = "./saved_models"
+    SAVE_WEIGHT = os.path.join(SAVE_PATH, f"best_model_weights_{model_type}.pth")
+
+    # 모델에 가중치 파일 불러오기
+    state_dict = torch.load(
+        SAVE_WEIGHT,
+        map_location=device,
+        weights_only=True
+    )
+    model.load_state_dict(state_dict)
+
     model.eval()
     score_fn.reset()
 
-    loss_total = 0
+    loss_total = 0.0
 
     with torch.no_grad():
         for feature, target, lengths in testDL:
@@ -284,27 +295,35 @@ def testing(model, testDL, score_fn, loss_fn, device):
             target = target.to(device)
             lengths = lengths
 
+            # 결과 추론
             logit = model(feature, lengths)
 
+            # 추론값으로 Loss값 계산
             loss = loss_fn(logit, target)
             loss_total += loss.item()
 
+            # 활성화 함수 + 이진 분류 결과로 변경
             probs = torch.sigmoid(logit)
             preds = (probs > 0.5).int()
 
+            # Score 누적
             score_fn.update(preds, target)
 
+    # Score 계산
     final_score = score_fn.compute().item()
+    # 배치별 Loss 평균 값
     final_loss = loss_total / len(testDL)
 
     return final_score, final_loss
 
 # 메인 함수
-def main():
+def main() -> None:
 
     # 데이터 경로 설정
     DATA_PATH = "./dataset.pkl"
+    SCALER_PATH = "./scaler.pkl"
 
+    # 데이터 불러오기
     with open(DATA_PATH, "rb") as f:
         data = pickle.load(f)
 
@@ -313,7 +332,7 @@ def main():
     X_test  = data["X_test"]
     y_test  = data["y_test"]
 
-    # 파라미터 설정
+    # 모델별 최적의 하이퍼파라미터 설정
     BATCH_SIZE = 128
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     EPOCH = 80
@@ -327,18 +346,23 @@ def main():
     lr = 1e-5
     n_layers = 3
     
+    # Scaler Fitting을 위한 Train 데이터 2차원 변환
     vstack_train = np.vstack(X_train)
 
+    # 변화량 데이터의 단위가 작으므로 Scaler Fitting
     scaler = StandardScaler()
     scaler.fit(vstack_train)
+
+    with open(SCALER_PATH, "wb") as f:
+        pickle.dump(scaler, f)
     
+    # Train, Test 데이터 Scaling
     X_train_scaled = [scaler.transform(seq).astype(np.float32) for seq in X_train]
     X_test_scaled = [scaler.transform(seq).astype(np.float32) for seq in X_test]
 
     # Dataset 생성
     trainDS = DetectionDataset(X_train_scaled, y_train)
     testDS = DetectionDataset(X_test_scaled, y_test)
-
 
     # Dataset -> DataLoader 전환
     trainDL = DataLoader(trainDS, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
@@ -352,7 +376,7 @@ def main():
                     bidirectional=bidirectional,
                     model_type=model_type).to(DEVICE)
     
-    # Loss, Score 객체 생성
+    # Loss, Score 검증 객체 생성
     loss_fn = nn.BCEWithLogitsLoss()
     score_fn = BinaryF1Score().to(DEVICE)
     
@@ -364,8 +388,10 @@ def main():
                         EPOCH, score_fn, loss_fn, DEVICE, 
                         model_type)
 
-    test_score, test_loss = testing(model, testDL, score_fn, loss_fn, DEVICE)
+    # 최종 Test
+    test_score, test_loss = testing(model, testDL, score_fn, loss_fn, DEVICE, model_type)
 
+    # Test 결과 출력
     print(f"\n\nTest Loss : {test_loss}")
     print(f"Test Score : {test_score}")
 
