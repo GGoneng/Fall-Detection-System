@@ -319,6 +319,9 @@ def testing(model: RNNModel, testDL: DataLoader, score_fn: BinaryF1Score,
 # 메인 함수
 def main() -> None:
 
+    # 실험 조건 고정
+    set_seed()
+
     # 데이터 경로 설정
     DATA_PATH = "./dataset.pkl"
     SCALER_PATH = "./scaler.pkl"
@@ -335,15 +338,15 @@ def main() -> None:
     # 모델별 최적의 하이퍼파라미터 설정
     BATCH_SIZE = 128
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    EPOCH = 80
+    EPOCH = 140
 
     input_size = 39
-    model_type = "lstm"
+    model_type = "gru"
 
-    bidirectional = True
-    dropout = 0.1
+    bidirectional = False
+    dropout = 0.2
     hidden_size = 256
-    lr = 1e-5
+    lr = 5e-5
     n_layers = 3
     
     # Scaler Fitting을 위한 Train 데이터 2차원 변환

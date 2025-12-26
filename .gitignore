@@ -7,6 +7,8 @@
 *.xml
 *.yaml
 *.yml
+*.txt
+*.docx
 
 # 대용량 데이터 (이미지, 오디오, 영상)
 *.png
