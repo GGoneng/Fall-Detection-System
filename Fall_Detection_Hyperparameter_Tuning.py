@@ -420,7 +420,7 @@ def main() -> None:
     EPOCH = 100
 
     input_size = 39
-    model_type = "gru"
+    model_type = "lstm"
 
     param_grid = {
         "lr": [5e-3, 1e-3, 5e-4, 1e-4],
