@@ -7,7 +7,7 @@
 <br><br>
 ## 📖 Overview
 
-This system is designed to rapidly detect falls, especially among the elderly population, and immediately notify caregivers to enable prompt response and intervention.<br>  
+This system is designed to rapidly detect falls, especially among the elderly population, and immediately notify caregivers to enable prompt response and intervention.  
 Unlike typical vision-based approaches, it detects falls **without any wearable sensors**, using only a camera module.<br>
 The system extracts skeleton keypoints and treats them as time-series data—similar to gyroscope readings—enabling fall detection through temporal analysis rather than standard image classification.  <br>
 A functional prototype was also implemented and deployed on a Raspberry Pi for real-world demonstration.
