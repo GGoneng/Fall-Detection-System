@@ -19,7 +19,7 @@ To ensure real-time performance on resource-constrained hardware, the system ado
 - **Author**: Jun-Yong Kwon, Minha Lee, Hyun-Seok Jung
 - **Degree**: Bachelor’s Thesis  
 - **Description**: This project is based on my undergraduate thesis focusing on real-time fall detection using skeleton-based time-series analysis optimized for edge devices.  
-- **Thesis PDF**: [Download](./thesis/GRU 모델 기반 낙상 감지 시스템 - 권준용, 이민하, 정현석.pdf)
+- **Thesis PDF**: [Download](./thesis/Fall_Detection_Thesis.pdf)
 
 <br><br>
 
