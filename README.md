@@ -3,6 +3,7 @@
 > ### **Fall Detection System**
 
 <br><br>
+<img width="512" height="768" alt="image" src="https://github.com/user-attachments/assets/d0c2c53a-bf76-41ff-863f-fcc421c2dd02" />
 
 ## 📖 Overview
 
