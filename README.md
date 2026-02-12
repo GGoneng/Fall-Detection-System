@@ -6,7 +6,9 @@
 <img width="512" height="768" alt="image" src="https://github.com/user-attachments/assets/d0c2c53a-bf76-41ff-863f-fcc421c2dd02" />
 
 ## 📖 Overview
+![Architecture Diagram](./docs/Fall_Detection_System_Diagram.png)
 
+<br><br>
 This system is designed to rapidly detect falls, especially among the elderly population, and immediately notify caregivers to enable prompt response and intervention.
 Unlike typical vision-based approaches, it detects falls **without any wearable sensors**, using only a camera module.
 The system extracts skeleton keypoints and treats them as time-series data, similar to gyroscope readings, enabling fall detection through temporal analysis rather than standard image classification.
@@ -20,7 +22,7 @@ To ensure real-time performance on resource-constrained hardware, the system ado
 - **Author**: Jun-Yong Kwon, Minha Lee, Hyun-Seok Jung
 - **Degree**: Bachelor’s Thesis  
 - **Description**: This project is based on my undergraduate thesis focusing on real-time fall detection using skeleton-based time-series analysis optimized for edge devices.  
-- **Thesis PDF**: [Download](./thesis/Fall_Detection_Thesis.pdf)
+- **Thesis PDF**: [Download](./docs/Fall_Detection_Thesis.pdf)
 
 <br><br>
 
